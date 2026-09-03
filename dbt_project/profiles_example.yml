@@ -1,0 +1,55 @@
+# Example ~/.dbt/profiles.yml — copy, rename, fill in with YOUR Snowflake details.
+# Never commit a real profiles.yml with credentials. Prefer key-pair auth or SSO
+# over plaintext password, especially for CI service accounts.
+
+payments_ledger_analytics:
+  target: dev
+  outputs:
+
+    dev:
+      type: snowflake
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT', 'your_account_identifier') }}"
+      user: "{{ env_var('SNOWFLAKE_USER', 'your_user') }}"
+      authenticator: "{{ env_var('SNOWFLAKE_AUTHENTICATOR', 'externalbrowser') }}"  # or 'snowflake' + password / key-pair for service accounts
+      role: "{{ env_var('SNOWFLAKE_ROLE', 'DBT_TRANSFORMER') }}"
+      database: "{{ env_var('SNOWFLAKE_DATABASE', 'PAYMENTS_LEDGER') }}"
+      warehouse: "{{ env_var('SNOWFLAKE_WAREHOUSE', 'WH_DBT_TRANSFORM') }}"
+      schema: "{{ env_var('SNOWFLAKE_SCHEMA', 'dev_yourname') }}"  # personal dev schema, e.g. dev_priya
+      threads: 4
+
+    ci:
+      type: snowflake
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT', 'your_account_identifier') }}"
+      user: "{{ env_var('SNOWFLAKE_CI_USER', 'your_ci_user') }}"
+      private_key: "{{ env_var('SNOWFLAKE_CI_PRIVATE_KEY', '') }}"  # key-pair auth for CI
+      role: "{{ env_var('SNOWFLAKE_ROLE', 'DBT_TRANSFORMER') }}"
+      database: "{{ env_var('SNOWFLAKE_DATABASE', 'PAYMENTS_LEDGER_CI') }}"
+      warehouse: "{{ env_var('SNOWFLAKE_WAREHOUSE', 'WH_DBT_TRANSFORM') }}"
+      schema: "{{ env_var('SNOWFLAKE_CI_SCHEMA', 'ci') }}"
+      threads: 4
+
+    airflow:
+      # Used when dbt is invoked by the Airflow DAG (airflow/dags/payments_ledger_dag.py).
+      # These SNOWFLAKE_AIRFLOW_* env vars are set at task-execution time from the
+      # `snowflake_default` Airflow Connection (Admin -> Connections) — never hardcoded
+      # in the DAG or this file. See airflow/README.md.
+      type: snowflake
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT', 'your_account_identifier') }}"
+      user: "{{ env_var('SNOWFLAKE_AIRFLOW_USER', 'your_airflow_service_user') }}"
+      password: "{{ env_var('SNOWFLAKE_AIRFLOW_PASSWORD', '') }}"
+      role: "{{ env_var('SNOWFLAKE_ROLE', 'DBT_TRANSFORMER') }}"
+      database: "{{ env_var('SNOWFLAKE_DATABASE', 'PAYMENTS_LEDGER') }}"
+      warehouse: "{{ env_var('SNOWFLAKE_WAREHOUSE', 'WH_DBT_TRANSFORM') }}"
+      schema: "{{ env_var('SNOWFLAKE_AIRFLOW_SCHEMA', 'orchestrated') }}"
+      threads: 4
+
+    prod:
+      type: snowflake
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT', 'your_account_identifier') }}"
+      user: "{{ env_var('SNOWFLAKE_PROD_USER', 'your_prod_user') }}"
+      private_key: "{{ env_var('SNOWFLAKE_PROD_PRIVATE_KEY', '') }}"
+      role: "{{ env_var('SNOWFLAKE_ROLE', 'DBT_TRANSFORMER') }}"
+      database: "{{ env_var('SNOWFLAKE_DATABASE', 'PAYMENTS_LEDGER') }}"
+      warehouse: "{{ env_var('SNOWFLAKE_WAREHOUSE', 'WH_DBT_TRANSFORM') }}"
+      schema: "{{ env_var('SNOWFLAKE_PROD_SCHEMA', 'prod') }}"  # overridden per-model by macros/generate_schema_name.sql
+      threads: 8

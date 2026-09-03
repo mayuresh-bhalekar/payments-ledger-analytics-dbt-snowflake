@@ -1,0 +1,26 @@
+dbt_project/target/
+dbt_project/dbt_packages/
+dbt_project/logs/
+dbt_project/package-lock.yml
+dbt_project/profiles.yml
+dbt_project/.env
+dbt_project/.user.yml
+logs/
+.venv/
+.venv-dbt/
+__pycache__/
+.DS_Store
+*.pyc
+.env
+CLAUDE.md
+
+# Personal interview-prep notes — names my real employers, career narrative,
+# and background. Keep locally, never push.
+TALKING_POINTS.md
+
+# Editor config — contains absolute paths to this machine's venv/home, so it is
+# machine-specific rather than something a cloner should inherit.
+# scripts/check_dbt_env.sh verifies the same setup portably; see it for what
+# these settings need to say.
+.vscode/
+.claude/

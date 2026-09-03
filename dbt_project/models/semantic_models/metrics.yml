@@ -1,0 +1,109 @@
+version: 2
+
+# Metrics defined once here, queryable by name (`mf query --metrics gmv`)
+# instead of requiring a human or agent to know or write the underlying SQL.
+# Every formula mirrors mart_revenue_semantic.sql exactly — same filters,
+# same math — so the two are cross-checkable against each other.
+
+metrics:
+  - name: gmv
+    description: Gross Merchandise Value — captured charge volume, USD.
+    type: simple
+    label: GMV
+    type_params:
+      measure: gross_amount_usd
+    filter: |
+      {{ Dimension('transaction__transaction_type') }} = 'charge'
+      and {{ Dimension('transaction__transaction_status') }} != 'failed'
+
+  - name: refunds_usd
+    description: Charge volume returned to buyers, USD.
+    type: simple
+    type_params:
+      measure: gross_amount_usd
+    filter: "{{ Dimension('transaction__transaction_type') }} = 'refund'"
+
+  - name: processor_cost_usd
+    description: Fees paid to payment processors (COGS), USD.
+    type: simple
+    type_params:
+      measure: fee_amount_usd
+    filter: |
+      {{ Dimension('transaction__transaction_type') }} = 'charge'
+      and {{ Dimension('transaction__transaction_status') }} != 'failed'
+
+  - name: charge_count
+    description: Count of captured/attempted charges.
+    type: simple
+    type_params:
+      measure: transaction_count
+    filter: "{{ Dimension('transaction__transaction_type') }} = 'charge'"
+
+  - name: bad_debt_writeoff_usd
+    description: >
+      Chargebacks lost after payout — see macros/recognize_bad_debt.sql.
+    type: simple
+    type_params:
+      measure: bad_debt_writeoff_usd
+
+  - name: dispute_count
+    description: Count of disputes filed.
+    type: simple
+    type_params:
+      measure: dispute_count
+
+  - name: net_revenue
+    description: GMV, net of refunds and bad-debt write-offs, USD.
+    label: Net Revenue
+    type: derived
+    type_params:
+      # A merchant/period with zero refunds or zero bad debt has no
+      # matching row at all in that underlying semantic model, so the
+      # FULL OUTER JOIN MetricFlow builds behind a derived metric leaves a
+      # NULL there rather than a 0 — coalesce it explicitly in the expr
+      # (confirmed via `mf query --explain` that nothing else fills it).
+      expr: gmv + coalesce(refunds_usd, 0) - coalesce(bad_debt_writeoff_usd, 0)
+      metrics:
+        - name: gmv
+        - name: refunds_usd
+        - name: bad_debt_writeoff_usd
+
+  - name: gross_profit_usd
+    description: Net revenue less processor cost, USD.
+    type: derived
+    type_params:
+      expr: net_revenue - coalesce(processor_cost_usd, 0)
+      metrics:
+        - name: net_revenue
+        - name: processor_cost_usd
+
+  - name: take_rate
+    description: Processor cost as a fraction of GMV.
+    type: ratio
+    type_params:
+      numerator: processor_cost_usd
+      denominator: gmv
+
+  - name: contribution_margin_pct
+    description: Gross profit as a fraction of net revenue.
+    type: derived
+    type_params:
+      expr: |
+        (net_revenue - coalesce(processor_cost_usd, 0))
+        / nullif(net_revenue, 0)
+      metrics:
+        - name: net_revenue
+        - name: processor_cost_usd
+
+  - name: chargeback_rate
+    description: Disputed transactions as a fraction of charges.
+    # `ratio` type here has the same NULL-vs-zero-rows problem as the
+    # derived metrics above (a merchant with zero disputes has no
+    # dispute_count row at all) — `derived` gives an expr to coalesce
+    # explicitly, same fix as net_revenue/gross_profit_usd above.
+    type: derived
+    type_params:
+      expr: coalesce(dispute_count, 0) / nullif(charge_count, 0)
+      metrics:
+        - name: dispute_count
+        - name: charge_count

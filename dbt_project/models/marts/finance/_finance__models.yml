@@ -1,0 +1,48 @@
+version: 2
+
+models:
+  - name: fct_transactions
+    description: Transaction-grain fact. Source for GMV/GTV and processor-cost metrics.
+    columns:
+      - name: transaction_id
+        tests: [unique, not_null]
+
+  - name: fct_disputes
+    description: Dispute-grain fact. Source for chargeback/dispute-rate metrics.
+    columns:
+      - name: dispute_id
+        tests: [unique, not_null]
+
+  - name: mart_revenue_semantic
+    description: >
+      The financial semantic layer — one row per merchant per month with
+      GMV, net revenue, take rate, contribution margin, and chargeback rate
+      each defined exactly once. This is what Metabase dashboards should
+      query, not the raw facts, so every stakeholder's "revenue" means the
+      same thing.
+    columns:
+      - name: merchant_id
+        tests:
+          - relationships:
+              to: ref('dim_merchant')
+              field: merchant_id
+      - name: gmv
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              inclusive: true
+      - name: take_rate
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 1
+              inclusive: true
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [merchant_id, period_month]
+
+  - name: mart_merchant_metrics
+    description: Merchant cohort/retention and LTV/CAC (CAC is a documented placeholder — see model header).
+    columns:
+      - name: merchant_id
+        tests: [unique, not_null]

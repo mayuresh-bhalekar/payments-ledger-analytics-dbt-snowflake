@@ -1,0 +1,76 @@
+version: 2
+
+models:
+  - name: stg_payments__merchants
+    description: One row per merchant. Email is masked at this boundary (see macros/mask_pii.sql).
+    columns:
+      - name: merchant_id
+        tests: [unique, not_null]
+      - name: status
+        tests:
+          - accepted_values:
+              values: ['active', 'suspended', 'churned']
+
+  - name: stg_payments__processors
+    description: Reference data — the payment processors settlements flow through, and each one's settlement currency and payout SLA.
+    columns:
+      - name: processor_id
+        tests: [unique, not_null]
+
+  - name: stg_payments__transactions
+    description: One row per charge or refund attempt, as authorized by the processor. Grain is transaction_id.
+    columns:
+      - name: transaction_id
+        tests: [unique, not_null]
+      - name: merchant_id
+        tests:
+          - relationships:
+              to: ref('stg_payments__merchants')
+              field: merchant_id
+      - name: processor_id
+        tests:
+          - relationships:
+              to: ref('stg_payments__processors')
+              field: processor_id
+      - name: transaction_type
+        tests:
+          - accepted_values:
+              values: ['charge', 'refund']
+      - name: status
+        tests:
+          - accepted_values:
+              values: ['captured', 'refunded', 'disputed', 'failed']
+
+  - name: stg_payments__settlements
+    description: One row per settlement leg paid out by a processor against a transaction. A transaction with no settlement row is still pending, failed, or held in dispute.
+    columns:
+      - name: settlement_id
+        tests: [unique, not_null]
+      - name: transaction_id
+        tests:
+          - relationships:
+              to: ref('stg_payments__transactions')
+              field: transaction_id
+
+  - name: stg_payments__disputes
+    description: One row per chargeback/dispute filed against a transaction.
+    columns:
+      - name: dispute_id
+        tests: [unique, not_null]
+      - name: transaction_id
+        tests:
+          - relationships:
+              to: ref('stg_payments__transactions')
+              field: transaction_id
+      - name: status
+        tests:
+          - accepted_values:
+              values: ['open', 'won', 'lost']
+
+  - name: stg_payments__fx_rates
+    description: Daily spot rate to convert a currency to the USD reporting currency.
+    columns:
+      - name: currency
+        tests: [not_null]
+      - name: rate_date
+        tests: [not_null]

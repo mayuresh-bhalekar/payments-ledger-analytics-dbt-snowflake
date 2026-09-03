@@ -1,0 +1,28 @@
+version: 2
+
+models:
+  - name: fct_ledger_entries
+    description: >
+      The financial ledger. One row per transaction, carrying its recognized
+      revenue category, FX gain/loss, and any bad-debt write-off. This is
+      the reconciliation source of truth: sum(transaction_amount_usd) where
+      revenue_category = 'gross_revenue' should tie to reported GMV, and
+      sum(settled_amount_usd) should tie to the processor's payout reports
+      (see tests/assert_ledger_reconciles_to_settlements.sql).
+    columns:
+      - name: transaction_id
+        tests: [unique, not_null]
+      - name: revenue_category
+        tests:
+          - accepted_values:
+              values:
+                - gross_revenue
+                - revenue_reversal
+                - bad_debt_writeoff
+                - pending_dispute_hold
+                - unrecognized
+      - name: bad_debt_writeoff_usd
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              inclusive: true

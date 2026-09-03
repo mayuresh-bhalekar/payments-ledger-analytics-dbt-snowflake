@@ -1,0 +1,75 @@
+name: dbt CI
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'dbt_project/**'
+      - '.github/workflows/dbt_ci.yml'
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    env:
+      # sqlfluff's dbt templater compiles the whole project (not just parses it),
+      # which evaluates is_incremental() against a live warehouse for fct_*
+      # models — it needs a real, non-interactive connection. The profile's
+      # 'dev' target defaults to externalbrowser auth, which can't run headless,
+      # so .sqlfluff pins the templater to the 'ci' target (key-pair auth)
+      # instead, same credentials as the dbt_build job below.
+      SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+      SNOWFLAKE_CI_USER: ${{ secrets.SNOWFLAKE_CI_USER }}
+      SNOWFLAKE_CI_PRIVATE_KEY: ${{ secrets.SNOWFLAKE_CI_PRIVATE_KEY }}
+      SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install sqlfluff + dbt
+        run: pip install sqlfluff==3.* sqlfluff-templater-dbt==3.* dbt-snowflake==1.8.*
+      - name: Use CI profiles.yml
+        run: cp dbt_project/profiles_example.yml dbt_project/profiles.yml
+      - name: dbt deps
+        working-directory: dbt_project
+        run: dbt deps
+      - name: Lint dbt models
+        working-directory: dbt_project
+        run: sqlfluff lint models --dialect snowflake
+
+  dbt_build:
+    runs-on: ubuntu-latest
+    needs: lint
+    env:
+      SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+      SNOWFLAKE_CI_USER: ${{ secrets.SNOWFLAKE_CI_USER }}
+      SNOWFLAKE_CI_PRIVATE_KEY: ${{ secrets.SNOWFLAKE_CI_PRIVATE_KEY }}
+      SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
+      # Relative to each step's working-directory (dbt_project), not the job's.
+      DBT_PROFILES_DIR: .
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dbt
+        run: pip install dbt-snowflake==1.8.*
+      - name: Use CI profiles.yml
+        run: cp dbt_project/profiles_example.yml dbt_project/profiles.yml
+      - name: dbt deps
+        working-directory: dbt_project
+        run: dbt deps
+      - name: dbt seed
+        working-directory: dbt_project
+        run: dbt seed --target ci
+      - name: dbt run (staging)
+        # snap_merchants snapshots stg_payments__merchants, so staging must
+        # exist before the first snapshot run — matters on a fresh database/schema.
+        working-directory: dbt_project
+        run: dbt run --target ci --select staging
+      - name: dbt snapshot
+        working-directory: dbt_project
+        run: dbt snapshot --target ci
+      - name: dbt build (models + tests)
+        working-directory: dbt_project
+        run: dbt build --target ci

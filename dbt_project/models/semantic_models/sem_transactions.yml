@@ -1,0 +1,49 @@
+version: 2
+
+semantic_models:
+  - name: sem_transactions
+    description: >
+      Transaction-grain semantic model backing GMV/GTV and processor-cost
+      metrics. Same source as fct_transactions.sql — no logic is redefined
+      here, only exposed as queryable measures/dimensions.
+    model: ref('fct_transactions')
+    defaults:
+      agg_time_dimension: transaction_date
+
+    entities:
+      - name: transaction
+        type: primary
+        expr: transaction_id
+      - name: merchant
+        type: foreign
+        expr: merchant_id
+      - name: processor
+        type: foreign
+        expr: processor_id
+
+    dimensions:
+      - name: transaction_date
+        type: time
+        type_params:
+          time_granularity: day
+        expr: created_at
+      - name: transaction_type
+        type: categorical
+      - name: transaction_status
+        type: categorical
+      - name: txn_currency
+        type: categorical
+
+    measures:
+      - name: gross_amount_usd
+        agg: sum
+        expr: gross_amount_usd
+      - name: fee_amount_usd
+        agg: sum
+        expr: fee_amount_usd
+      - name: net_amount_usd
+        agg: sum
+        expr: net_amount_usd
+      - name: transaction_count
+        agg: count
+        expr: transaction_id

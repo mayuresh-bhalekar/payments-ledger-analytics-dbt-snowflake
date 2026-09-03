@@ -1,0 +1,66 @@
+name: 'payments_ledger_analytics'
+version: '1.0.0'
+config-version: 2
+
+profile: 'payments_ledger_analytics'
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+snapshot-paths: ["snapshots"]
+macro-paths: ["macros"]
+analysis-paths: ["analyses"]
+
+target-path: "target"
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+vars:
+  # Bad-debt write-off policy: a lost dispute on an already-settled transaction
+  # is recognized as bad debt rather than simply reversing revenue, since the
+  # payout already left the ledger. See macros/recognize_bad_debt.sql.
+  bad_debt_recognition_lag_days: 0
+  # Reporting currency every mart/metric is translated into.
+  reporting_currency: USD
+  # Placeholder acquisition cost used by mart_merchant_metrics until a real
+  # marketing-spend source exists to attribute CAC per merchant.
+  assumed_cac_usd: 150
+
+models:
+  payments_ledger_analytics:
+    staging:
+      +schema: staging
+      +materialized: view
+    intermediate:
+      +schema: intermediate
+      +materialized: view
+    marts:
+      core:
+        +schema: marts_core
+        +materialized: table
+      ledger:
+        +schema: marts_ledger
+        +materialized: incremental
+        +on_schema_change: append_new_columns
+      finance:
+        +schema: marts_finance
+        +materialized: table
+    semantic_models:
+      +schema: staging
+      +materialized: table
+
+seeds:
+  payments_ledger_analytics:
+    +schema: staging
+    payments_transactions:
+      +column_types:
+        gross_amount_cents: number(12,0)
+        fee_amount_cents: number(12,0)
+    payments_settlements:
+      +column_types:
+        settled_amount_cents: number(12,0)
+
+snapshots:
+  payments_ledger_analytics:
+    +target_schema: snapshots

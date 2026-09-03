@@ -1,0 +1,5 @@
+processor_id,processor_name,settlement_currency,payout_delay_days
+P01,Stripe,USD,2
+P02,PayPal,USD,1
+P03,Adyen,EUR,3
+P04,Braintree,USD,2

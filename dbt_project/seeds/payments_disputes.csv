@@ -1,0 +1,6 @@
+dispute_id,transaction_id,reason,status,amount_cents,opened_at,resolved_at
+D001,T0012,fraudulent,open,1999,2026-07-06 08:00:00,
+D002,T0016,product_not_received,open,49900,2026-07-06 09:00:00,
+D003,T0029,fraudulent,open,99900,2026-07-16 10:00:00,
+D004,T0018,fraudulent,lost,49900,2026-07-15 07:00:00,2026-07-25 12:00:00
+D005,T0005,duplicate,won,29900,2026-07-12 07:00:00,2026-07-20 12:00:00

@@ -1,0 +1,28 @@
+version: 2
+
+semantic_models:
+  - name: sem_merchant
+    description: >
+      Dimension-only semantic model (no measures) so metrics elsewhere can
+      group/filter by merchant attributes, e.g. `group_by merchant__category`.
+      Same source as dim_merchant.sql.
+    model: ref('dim_merchant')
+
+    entities:
+      - name: merchant
+        type: primary
+        expr: merchant_id
+
+    dimensions:
+      - name: merchant_name
+        type: categorical
+      - name: category
+        type: categorical
+      - name: country
+        type: categorical
+      - name: status
+        type: categorical
+      - name: signup_date
+        type: time
+        type_params:
+          time_granularity: day

@@ -1,0 +1,37 @@
+version: 2
+
+semantic_models:
+  - name: sem_ledger_entries
+    description: >
+      Ledger-grain semantic model backing bad-debt and FX gain/loss
+      measures. Same source as fct_ledger_entries.sql — the accounting
+      logic (categorize_revenue, recognize_bad_debt, fx_gain_loss macros)
+      is computed once there, not re-derived here.
+    model: ref('fct_ledger_entries')
+    defaults:
+      agg_time_dimension: ledger_entry_date
+
+    entities:
+      - name: transaction
+        type: primary
+        expr: transaction_id
+      - name: merchant
+        type: foreign
+        expr: merchant_id
+
+    dimensions:
+      - name: ledger_entry_date
+        type: time
+        type_params:
+          time_granularity: day
+        expr: transaction_at
+      - name: revenue_category
+        type: categorical
+
+    measures:
+      - name: bad_debt_writeoff_usd
+        agg: sum
+        expr: bad_debt_writeoff_usd
+      - name: fx_gain_loss_usd
+        agg: sum
+        expr: fx_gain_loss_usd

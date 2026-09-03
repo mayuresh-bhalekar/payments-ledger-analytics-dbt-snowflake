@@ -1,0 +1,38 @@
+version: 2
+
+semantic_models:
+  - name: sem_disputes
+    description: >
+      Dispute-grain semantic model backing chargeback/dispute-rate
+      measures. Same source as fct_disputes.sql.
+    model: ref('fct_disputes')
+    defaults:
+      agg_time_dimension: opened_date
+
+    entities:
+      - name: dispute
+        type: primary
+        expr: dispute_id
+      - name: transaction
+        type: foreign
+        expr: transaction_id
+      - name: merchant
+        type: foreign
+        expr: merchant_id
+
+    dimensions:
+      - name: opened_date
+        type: time
+        type_params:
+          time_granularity: day
+        expr: opened_at
+      - name: dispute_status
+        type: categorical
+
+    measures:
+      - name: dispute_count
+        agg: count
+        expr: dispute_id
+      - name: dispute_amount_usd
+        agg: sum
+        expr: dispute_amount

@@ -1,0 +1,20 @@
+version: 2
+
+models:
+  - name: dim_merchant
+    description: One row per merchant.
+    columns:
+      - name: merchant_id
+        tests: [unique, not_null]
+
+  - name: dim_processor
+    description: Reference dimension of payment processors.
+    columns:
+      - name: processor_id
+        tests: [unique, not_null]
+
+  - name: dim_date
+    description: Calendar date spine used to join facts to fiscal periods for cohort/retention reporting.
+    columns:
+      - name: date_day
+        tests: [unique, not_null]

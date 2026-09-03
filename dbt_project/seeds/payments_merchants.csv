@@ -1,0 +1,13 @@
+merchant_id,merchant_name,merchant_email,category,country,signup_date,status,source_last_modified
+M001,Aurora Fitness Co,billing@aurorafitness.example,Fitness & Coaching,US,2023-01-15,active,2026-08-01 00:00:00
+M002,Nomad Trading Academy,accounts@nomadtrading.example,Education,US,2023-02-02,active,2026-08-01 00:00:00
+M003,Pixel Forge Studio,finance@pixelforge.example,Digital Products,CA,2023-03-10,active,2026-07-15 00:00:00
+M004,Vertex Sports Picks,team@vertexpicks.example,Sports & Betting Tips,US,2023-04-22,active,2026-08-01 00:00:00
+M005,Lumen Language Club,hello@lumenlang.example,Education,GB,2023-05-30,active,2026-06-01 00:00:00
+M006,Cascade Crypto Signals,ops@cascadecrypto.example,Finance,US,2023-06-18,suspended,2026-07-01 00:00:00
+M007,Bright Path Coaching,support@brightpath.example,Coaching,US,2023-07-09,active,2026-08-01 00:00:00
+M008,Northline Reselling,contact@northline.example,Reselling,US,2023-08-25,active,2026-08-01 00:00:00
+M009,Solace Wellness,team@solacewellness.example,Health & Wellness,AU,2023-09-14,churned,2026-05-01 00:00:00
+M010,Ironclad Trading Bots,dev@ironcladbots.example,Finance,US,2023-10-01,active,2026-08-01 00:00:00
+M011,Skyline Music Lessons,info@skylinemusic.example,Education,US,2024-01-11,active,2026-08-01 00:00:00
+M012,Beacon SaaS Tools,billing@beaconsaas.example,Digital Products,US,2024-02-19,active,2026-08-01 00:00:00

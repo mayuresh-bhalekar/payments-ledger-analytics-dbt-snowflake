@@ -1,0 +1,25 @@
+[sqlfluff]
+templater = dbt
+dialect = snowflake
+exclude_rules = ambiguous.column_count, structure.column_order,
+    references.qualification, references.consistent, layout.indent
+# references.qualification (RF02) / references.consistent (RF03) fight each
+# other on every dbt is_incremental() filter of the form
+# `where settled_at > (select max(settled_at) from {{ this }})`:
+# unqualified trips RF02 ("ambiguous — two tables in scope", counting the
+# correlated subquery's {{ this }}), qualifying it then trips RF03
+# ("inconsistent with the surrounding `select *`"). No single style
+# satisfies both, so both are excluded rather than fought per-model.
+# layout.indent (LT02) misjudges indentation inside a `{% if is_incremental() %}`
+# block — it indents relative to the raw Jinja tag, not the rendered SQL — and
+# reliably disagrees with its own autofix inside those blocks. Excluded rather
+# than fought; every other file keeps normal indentation, this only affects
+# lines inside an is_incremental() conditional.
+
+[sqlfluff:templater:dbt]
+profiles_dir = ./dbt_project
+project_dir = ./dbt_project
+target = ci
+
+[sqlfluff:indentation]
+tab_space_size = 4
