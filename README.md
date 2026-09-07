@@ -2,7 +2,7 @@
 
 A production-shaped reference implementation of a payments analytics-engineering platform: ingest payment-processor **settlement and dispute data** into Snowflake, encode **accounting logic in code** (revenue recognition, bad-debt write-offs, FX gain/loss), and expose a **financial semantic layer** (GMV, take rate, contribution margin, chargeback rate, LTV/CAC) that Finance, Product, and GTM can all query and get the same number from.
 
-This is a **portfolio/demo project**, built to prepare for an Analytics Engineer, Strategic Finance interview at a payments/marketplace company. It's not that company's code or data — it's a from-scratch, realistically-shaped implementation of the same problem (settlement ingestion → ledger → semantic layer → self-serve BI) so I can walk through real dbt models, real accounting logic, and real trade-offs rather than talk about them in the abstract.
+This is a **portfolio/demo project**
 
 ---
 
