@@ -4,10 +4,8 @@
 |---|---|
 | **Status** | Design draft — **not implemented** |
 | **Target repo** | [`mayuresh-bhalekar/payments-ledger-analytics-dbt-snowflake`](https://github.com/mayuresh-bhalekar/payments-ledger-analytics-dbt-snowflake) |
-| **Reference pattern** | [`darshilparmar/zomato-ai-data-engineering-end-to-end-project`](https://github.com/darshilparmar/zomato-ai-data-engineering-end-to-end-project) |
 | **Audience** | Engineers implementing via plan-first PRs (no direct commits to `main`) |
 | **Database** | `PAYMENTS_LEDGER` |
-| **Related analysis** | `/workspace/analysis/ai-lane-mapping-report.md` |
 
 ---
 
@@ -25,12 +23,25 @@ The lane must preserve **finance trust**: LLM outputs are side columns and chat 
 
 ### Non-goals
 
-- No S3 lake / COPY choreography (Zomato-style). Ingestion stays seed → (future) RAW.
+- No S3 lake / COPY choreography. Ingestion stays seed → (future) RAW.
 - No LangChain-by-default; prefer raw OpenAI or Snowflake Cortex + Snowflake connector.
 - No LLM writes into `fct_ledger_entries`, and **no LLM overrides** of `categorize_revenue`, `recognize_bad_debt`, or `fx_gain_loss`.
 - No embedding of merchant PII (`stg_payments__merchants` emails, etc.).
 - No silent auto-commit of AI-generated SQL or metric formulas into the repo.
 - Interactive apps (RAG chat, Text-to-Metrics) are **not** batch-DAG blockers.
+
+### Lane principles
+
+- AI is a **side lane**: structured outputs in a dedicated `AI` schema; dbt models them like any other source (`tag:ai`).
+- Enrichment is **idempotent + sample-capped** (`SAMPLE_N`).
+- Orchestration inserts enrich **between** core dbt and AI-tagged marts.
+- Chat UIs show sources / generated query text (no silent answers).
+- Enrichment reads `stg_payments__*` (typed, PII-masked), never RAW.
+- RAG indexes policy docs and metric definitions, not transaction or merchant text.
+- Interactive queries use `BI_READER` / `AI_ANALYST`, never `DBT_TRANSFORMER`.
+- Free SQL (if enabled later) uses AST parse + table allowlist, not substring keyword bans.
+- Prefer Snowflake `AI.*` tables (VECTOR / Cortex) for shared state beyond a laptop demo cache.
+- MetricFlow-first; Text-to-SQL is optional later.
 
 ### Hard trust rule (repeat everywhere it matters)
 
@@ -88,7 +99,7 @@ These feed `fct_ledger_entries` and must remain the **sole** source of ledger am
 dbt_deps → dbt_seed → dbt_run_staging → dbt_snapshot → dbt_run_marts → dbt_test
 ```
 
-Natural insert for enrichment: after staging (or after marts if ledger context is needed), before an `ai`-tagged dbt select — mirror Zomato’s core-then-enrich-then-AI-marts split.
+Natural insert for enrichment: after staging (or after marts if ledger context is needed), then a dedicated `ai`-tagged dbt select so core marts stay independent of enrichment.
 
 ### Dispute seed reality (important for Capability A)
 
@@ -100,51 +111,7 @@ Coded `reason` ∈ `{fraudulent, product_not_received, duplicate}`; `status` ∈
 
 ---
 
-## 3. Reference pattern from Zomato AI lane
-
-### What Zomato does (brief)
-
-```
-CSV → S3 → Snowflake RAW (COPY)
-  → dbt STAGING → dbt MARTS → Streamlit / Snowsight
-
-Parallel AI lane (gpt-4o-mini + text-embedding-3-small):
-  (1) LLM Enrichment  (2) RAG  (3) Text-to-SQL
-```
-
-DAG `zomato_batch`: `reload_raw → dbt_build_core (--exclude tag:ai) → enrich_reviews → dbt_build_ai (--select tag:ai)`.
-
-| Capability | Zomato artifact | Pattern |
-|---|---|---|
-| Enrichment | `ai/enrich_reviews.py` → `AI.REVIEW_ENRICHED` → `mart_review_insights` (`tag:ai`) | Python job writes AI schema; dbt sources it |
-| RAG | `ai/rag_chat.py` over review sample; local `review_embeddings.parquet` | Embed → cosine top-K → grounded answer + sources |
-| Text-to-SQL | `ai/text_to_sql.py` | NL → JSON SQL → substring “SELECT-only” guard → `DBT_ROLE` on MARTS |
-
-### Copy
-
-- AI as a **side lane**: structured outputs in a dedicated schema → dbt models them like any other source (`tag:ai`).
-- Enrichment job **idempotent + sample-capped** (`SAMPLE_N`).
-- Orchestration inserts enrich **between** core dbt and AI marts.
-- Chat UIs show sources / generated query text (no silent answers).
-
-### Do **not** copy
-
-| Don’t | Do instead |
-|---|---|
-| Review-text RAG as flagship | Policy docs + metric defs RAG (no free-text reviews) |
-| Hardcoded Gold schema string | MetricFlow metric names; schema from manifest / `information_schema` if SQL |
-| Substring forbidden-word SQL guard | AST parse + table allowlist (`created_at` false positive) |
-| Run interactive SQL as transformer role | `BI_READER` or `AI_ANALYST` ⊂ BI grants |
-| Local-only parquet as sole vector store | Prefer `AI.*` Snowflake tables (VECTOR / Cortex) beyond laptop demo |
-| Enrichment reading RAW | Read `stg_payments__*` (typed, PII-masked) |
-| LLM redefine revenue / bad debt | Keep macros sole books logic |
-| S3 + COPY for AI lane | Stay on seed / future RAW |
-| Text-to-SQL before Text-to-Metrics | MetricFlow-first (README already points here) |
-| LangChain by default | Raw OpenAI/Cortex + connector |
-
----
-
-## 4. Target architecture — payments AI lane
+## 3. Target architecture — payments AI lane
 
 ```mermaid
 flowchart TB
@@ -216,11 +183,11 @@ Interactive apps stay **out of** the batch DAG.
 
 ---
 
-## 5. Capability A — Dispute LLM Enrichment *(priority 1)*
+## 4. Capability A — Dispute LLM Enrichment *(priority 1)*
 
 ### Intent
 
-Assist ops/risk with structured labels on disputes without touching books. Zomato analog: `enrich_reviews.py` → `AI.REVIEW_ENRICHED` → `mart_review_insights`.
+Assist ops/risk with structured labels on disputes without touching books. A Python job writes assistive columns to `AI.DISPUTE_ENRICHED`; dbt sources that table (`tag:ai`) into `mart_dispute_insights`.
 
 ### Data
 
@@ -256,7 +223,7 @@ CREATE TABLE IF NOT EXISTS AI.DISPUTE_ENRICHED (
 );
 ```
 
-Python job may also `CREATE TABLE IF NOT EXISTS` defensively (Zomato pattern), but canonical DDL lives in `snowflake/`.
+Python job may also `CREATE TABLE IF NOT EXISTS` defensively, but canonical DDL lives in `snowflake/`.
 
 ### Python job sketch — `ai/enrich/enrich_disputes.py`
 
@@ -298,7 +265,7 @@ def upsert(conn, enriched: dict) -> None:
     ...
 ```
 
-**Model options:** OpenAI `gpt-4o-mini` JSON mode (parity with Zomato) **or** Snowflake Cortex `COMPLETE` to keep compute in-account. Choose one in Phase 1; document in `ai/example.env`.
+**Model options:** OpenAI `gpt-4o-mini` JSON mode **or** Snowflake Cortex `COMPLETE` to keep compute in-account. Choose one in Phase 1; document in `ai/example.env`.
 
 ### dbt source + mart
 
@@ -392,11 +359,11 @@ Prefer a dedicated `dbt_run_ai` after core marts so `mart_dispute_insights` can 
 
 ---
 
-## 6. Capability B — Policy & Metrics RAG *(priority 2)*
+## 5. Capability B — Policy & Metrics RAG *(priority 2)*
 
 ### Intent
 
-“Chat with accounting policy & metric definitions” — grounded answers with source paths. Zomato analog: `rag_chat.py` over reviews; we index **docs**, not transaction text.
+“Chat with accounting policy & metric definitions” — grounded answers with source paths. Index **docs** (README, macros, metric YAML), not transaction text.
 
 ### Corpus list (index these)
 
@@ -417,7 +384,7 @@ Prefer a dedicated `dbt_run_ai` after core marts so `mart_dispute_insights` can 
 
 | Stage | Storage |
 |---|---|
-| MVP / laptop demo | Local parquet or pickle under `ai/rag/.cache/` (gitignored), Zomato-style |
+| MVP / laptop demo | Local parquet or pickle under `ai/rag/.cache/` (gitignored) |
 | Target | Snowflake `AI.DOC_CHUNKS` with `VECTOR` or Cortex `EMBED_TEXT_768` so Airflow/apps share state |
 
 ```sql
@@ -447,7 +414,7 @@ CREATE TABLE IF NOT EXISTS AI.DOC_CHUNKS (
 
 ---
 
-## 7. Capability C — Text-to-Metrics then optional Text-to-SQL *(priority 3)*
+## 6. Capability C — Text-to-Metrics then optional Text-to-SQL *(priority 3)*
 
 ### Intent
 
@@ -489,7 +456,7 @@ Governed “chat with the warehouse.” Prefer MetricFlow (already cross-checked
 
 ---
 
-## 8. Folder layout proposal under `ai/`
+## 7. Folder layout proposal under `ai/`
 
 Live **alongside** `dbt_project/` without changing core contracts until tagged models land:
 
@@ -526,7 +493,7 @@ payments-ledger-analytics-dbt-snowflake/
 
 ---
 
-## 9. Snowflake AI schema + grants changes (SQL sketches)
+## 8. Snowflake AI schema + grants changes (SQL sketches)
 
 ### Schema (append to `snowflake/00_setup_database_warehouse.sql`)
 
@@ -576,14 +543,13 @@ CREATE WAREHOUSE IF NOT EXISTS WH_AI_QUERY
 
 ---
 
-## 10. Phased rollout (user priority order)
+## 9. Phased rollout (owner priority order)
 
-> Owner priority: **Enrichment → RAG → Text-to-Metrics → Harden**.  
-> (Note: the mapping report suggested Text-to-Metrics first for leverage; this design follows the owner’s stated order.)
+> Owner priority: **Enrichment → RAG → Text-to-Metrics → Harden**.
 
-### Phase 0 — Plumbing (~0.5–1 day)
+### Phase 0 — Plumbing
 
-- Design `CREATE SCHEMA AI` + grants (this doc’s §9).
+- Design `CREATE SCHEMA AI` + grants (this doc’s §8).
 - Scaffold empty `ai/` tree + `example.env` + `requirements.txt`.
 - Document DAG insert points; **no production DAG change until Phase 1 lands**.
 
@@ -593,20 +559,20 @@ CREATE WAREHOUSE IF NOT EXISTS WH_AI_QUERY
 - DDL for `AI.DISPUTE_ENRICHED`.
 - dbt `_ai_sources.yml` + `mart_dispute_insights.sql` (`tag:ai`).
 - Wire Airflow `enrich_disputes` + `dbt_run_ai`.
-- **Acceptance:** §5 checklist.
+- **Acceptance:** §4 checklist.
 
 ### Phase 2 — Policy RAG MVP
 
 - `build_index.py` over corpus list; `rag_chat.py` with citations.
 - Local cache OK; plan Snowflake `AI.DOC_CHUNKS` in Phase 4.
-- **Acceptance:** §6 checklist.
+- **Acceptance:** §5 checklist.
 
 ### Phase 3 — Text-to-Metrics MVP
 
 - `text_to_metrics/app.py`: NL → allowlisted `mf query`.
 - Log asks; show mf args + results.
 - Optional thin dbt-mcp wiring (README §8).
-- **Acceptance:** §7 MetricFlow checklist.
+- **Acceptance:** §6 MetricFlow checklist.
 
 ### Phase 4 — Harden
 
@@ -619,7 +585,7 @@ CREATE WAREHOUSE IF NOT EXISTS WH_AI_QUERY
 
 ---
 
-## 11. Security & finance trust rules
+## 10. Security & finance trust rules
 
 1. **Books of record are dbt macros + `fct_ledger_entries`.** AI labels never MERGE/UPDATE those tables.
 2. **Least privilege:** enrichment writes as `DBT_TRANSFORMER` into `AI` only; interactive chat uses `BI_READER` / `AI_ANALYST`.
@@ -634,9 +600,9 @@ CREATE WAREHOUSE IF NOT EXISTS WH_AI_QUERY
 
 ---
 
-## 12. Open questions for the owner
+## 11. Open questions for the owner
 
-1. **LLM vendor:** OpenAI `gpt-4o-mini` (Zomato parity) vs Snowflake Cortex-only (data stays in-account)?
+1. **LLM vendor:** OpenAI `gpt-4o-mini` vs Snowflake Cortex-only (data stays in-account)?
 2. **Enrichment timing:** after staging only, or after core marts so joins to `fct_disputes` / merchant metrics are available in the same DAG cycle?
 3. **Dispute narratives:** add synthetic/demo `dispute_narrative` to `payments_disputes.csv` in Phase 1, or stay coded-reason-only until Phase 4?
 4. **Vector store for RAG MVP:** local parquet acceptable for first PR, or require Snowflake `VECTOR` from day one?
@@ -647,7 +613,7 @@ CREATE WAREHOUSE IF NOT EXISTS WH_AI_QUERY
 
 ---
 
-## 13. Appendix: example prompts / example NL questions
+## 12. Appendix: example prompts / example NL questions
 
 ### A. Enrichment system prompt (sketch)
 
@@ -705,4 +671,4 @@ When authorized to open a PR:
 
 ---
 
-*End of design draft. Source synthesis: live repo tree (2026-09) + `/workspace/analysis/ai-lane-mapping-report.md` + Zomato architecture pattern.*
+*End of design draft.*
